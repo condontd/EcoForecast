@@ -1,0 +1,82 @@
+Epidemiology: Seasonal Influenza
+========================================================
+
+
+```{r}
+gflu = read.csv("http://www.google.org/flutrends/us/data.txt",skip=11)
+cflu = read.csv("~/git/EcoForecast/Data/FluViewPhase2Data/ILINet.csv",skip=1)
+  ##CDC data downloaded 6.10.13 from http://gis.cdc.gov/grasp/fluview/fluportaldashboard.html
+plot(as.Date(gflu$Date)
+     ,gflu$HHS.Region.1..CT..ME..MA..NH..RI..VT.
+     ,type='l')
+cflu = cflu[which(cflu$REGION == "Region 1"),]
+#cflu.HHS1 = cflu$ILITOTAL[sel]
+cflu.date = strptime(paste(cflu$YEAR,(cflu$WEEK-1)*7+1,sep=" "),format="%Y %j")
+lines(as.Date(cflu.date),cflu$ILITOTAL,col=2)
+
+## create a table to match the CDC week numbers (which are numbered based on the Saturday
+## at the end of the week) to the Google dates (for Sunday at the beginning of the week)
+s <- seq(as.Date("1996-12-01"), as.Date("2013-12-31"), by = "day") #produce all days
+sat.sel = which(format(s,"%w") == "6" & as.integer(format(s,"%Y"))>1996)
+series.sun<-data.frame(day.sun=s[sat.sel-6],
+                       week.val=as.integer(format(s[sat.sel],"%V")), #U
+                       year=as.integer(format(s[sat.sel],"%Y"))) 
+for(i in 1:(nrow(series.sun)-1)) {
+  if(series.sun$week.val[i] >series.sun$week.val[i+1] &
+      series.sun$year[i] == series.sun$year[i+1]) series.sun$year[i] = series.sun$year[i]-1
+}
+gmch = match(as.Date(gflu$Date),series.sun$day.sun)
+cmch = match(series.sun$week.val*10000+series.sun$year,cflu$WEEK*10000+cflu$YEAR)
+
+X = gflu$HHS.Region.1..CT..ME..MA..NH..RI..VT.
+Y = cflu$ILITOTAL[cmch[gmch]]
+plot(X,Y,xlab="Google",ylab="CDC",log="xy")
+log.calib = lm(log10(Y)~log10(X))
+abline(log.calib)
+plot(X,Y,xlab="Google",ylab="CDC")
+calib = lm(Y~X-1)
+abline(calib)
+summary(calib)
+
+plot(as.Date(gflu$Date)
+     ,X*coef(calib)
+     ,type='l',xlab="Time",ylab="ILI", xlim=c(as.Date("2012-01-01"),as.Date("2013-12-31")))
+lc = coef(log.calib)
+lines(as.Date(gflu$Date),10^(lc[1]+lc[2]*log10(X)),col=3)
+lines(as.Date(gflu$Date),Y,col=2)
+legend("topleft",legend=c("Google","CDC","logGoogle"),col=1:3,lty=1)
+
+```
+
+You can also embed plots, for example:
+
+```{r}
+
+##initial conditions
+I_obs = gflu$HHS.Region.1..CT..ME..MA..NH..RI..VT.
+nt = length(Iobs)
+N = 6646144 ## http://quickfacts.census.gov/qfd/states/25000.html estimate for 7.1.12
+S = rep(N,nt)
+I = rep(0,nt)
+R = rep(0,nt)
+
+## storage
+
+
+
+
+## Case 1: assimilate just Google Flu in state-space
+
+
+## Case 2: assimilate both in state-space
+
+## Case 3: pseudo real-time assimilate and forecast GF
+
+
+  ## assess forecast uncertainty
+
+## Case 4: pseudo real-time assimilate both (with lag on CDC)
+
+
+```
+
