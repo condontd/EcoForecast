@@ -161,4 +161,68 @@ save(theta,theta.calib,TDR,TDR.calib,y,pi,pi2,file="Ch9.Rdata")
 
 ####    MISSING DATA EXAMPLE
 
+## Missing Data
+a = 10
+b = -0.3
+v = 0.5
+n = 25
 
+xtrue <- runif(n,0,10)
+ey <- a + b *xtrue
+ytrue <- rnorm(n,ey,v)
+
+x <- c(xtrue,NA)
+y <- c(ytrue,7.5)
+mis <- n+1
+n <- n+1
+
+
+par(lwd=2,cex=1.5)
+plot(x,y)
+abline(a,b)
+#for(i in 1:n){lines(rep(x[i],2),c(y[i],ybar[i]),lty=2)}
+
+
+### JAGS
+library(rjags)
+library(R2WinBUGS)
+model <- function(){
+  ## priors
+  for(i in 1:2) { beta[i] ~ dnorm(0,0.001)}  
+  sigma ~ dgamma(0.1,0.1)
+  for(i in mis) { x[i] ~ dunif(0,10)}
+  
+  for(i in 1:n){
+    mu[i] <- beta[1]+beta[2]*x[i]
+    mup[i] <- beta[1]+beta[2]*xp[i]
+    y[i] ~ dnorm(mu[i],sigma)
+    yp[i] ~ dnorm(mup[i],sigma)
+  }
+}
+
+write.model(model,"mis.jags")
+xp = seq(0,10,length=n)
+mod <- jags.model("mis.jags",data=list(x=x,y=y,mis=mis,n=n,xp=xp),n.adapt=1000,n.chains=3)
+jdat <- coda.samples(mod,variable.names=c("beta","sigma","x[26]"),n.iter=1000) ## burnin
+plot(jdat)
+
+jdat <- coda.samples(mod,variable.names=c("beta","sigma","x[26]","mup","yp"),n.iter=30000) ## samples
+dat <- as.matrix(jdat)
+pi <- apply(dat,2,quantile,c(0.025,0.5,0.975))
+#dic <- dic.samples(mod,5000,type="pD")
+CI = pi[,3:28]
+PI = pi[,31:56]
+x26 = pi[,30]
+  
+par(lwd=2,cex=1.2)
+plot(x,y,xlim=c(0,10),ylim=range(CI),type='n',cex.main=2,main="Missing Data Model",cex.lab=1.5,mgp=c(2.4,0.9,0))
+ciEnvelope(xp,PI[1,],PI[3,],col="lightgrey")
+ciEnvelope(xp,CI[1,],CI[3,],col="darkgrey")
+lines(xp,CI[2,],lwd=4)
+#abline(pi[2,1],pi[2,2],lwd=4)
+#abline(a,b)
+abline(h=7.5,col=3,lty=2,lwd=3)
+xmis <- density(dat[,30])
+xmis$y[xmis$x > 10] = 0
+lines(xmis$x,xmis$y*4 + 7.5,col=3,lwd=8)
+points(x,y,pch=18)
