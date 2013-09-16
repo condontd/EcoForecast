@@ -1,6 +1,125 @@
 Exercise 3: Tools for big data
 ========================================================
 
+system('grep -ir "fia" *.Rmd')
+txt = system('grep -ir "fia" *.Rmd',intern=TRUE)
+
+Pulling data directly off the web
+---------------------------------
+
+```{r}
+gflu = read.csv("http://www.google.org/flutrends/us/data.txt",skip=11)
+time = as.Date(gflu$Date)
+plot(time,gflu$Boston..MA,type='l')
+```
+
+For unstructured text "readLines" also accepts a URL. 
+
+Question 1: 
+
+Plot the rank vs log(abundance) curve for tree seedling counts from Rhode Island. Data is available at http://apps.fs.fed.us/fiadb-downloads/RI_SEEDLING.CSV and the relevant columns are TREECOUNT (raw seedling counts) and SPCD (species codes). 
+Hints: tapply, sum, na.rm=TRUE, sort, decreasing=TRUE, log='y'
+
+```{r}
+fia = read.csv("http://apps.fs.fed.us/fiadb-downloads/RI_SEEDLING.CSV")
+abundance = tapply(fia$TREECOUNT,fia$SPCD,sum,na.rm=TRUE)
+plot(sort(abundance,decreasing=TRUE),log="y",type='b')
+```
+
+WebScraping
+-----------
+
+For more complex problems we can use the RCurl library to grab THML or XML structured content off the web and then use the XML library to parse the code
+
+```{r}
+# Install RCurl if necessary
+install.packages("RCurl", dependencies = TRUE)
+library("RCurl")
+
+# Install the XML package if necessary
+install.packages("XML", dependencies = TRUE)
+library("XML")
+
+nu <- function(x){as.numeric(as.character(x))}
+
+yield_html <- getURL("https://www.betydb.org/maps/yields?site=783")  ## raw html
+yield_table = readHTMLTable(yield_html)[[1]]    ##grab table 
+yield_table = within(yield_table,{                                   ## convert numeric rows
+  Mean = nu(Mean)
+  N = nu(N)
+  Stat = nu(Stat)
+})
+
+hist(yield_table$Mean)
+```
+
+
+Question 2:
+What fraction of the state-level files in the FIA database at http://apps.fs.fed.us/fiadb-downloads/datamart.html were created before 2011/1/1 ?  hint: this is the 6th table on the page
+
+```{r}
+fia.updates = getURL("http://apps.fs.fed.us/fiadb-downloads/datamart.html")
+fia_table = readHTMLTable(fia.updates)
+fia.date = as.Date(fia_table[[6]][,4])
+plot(sort(fia.date),type='l')
+sum(fia.date < as.Date("2011/1/1"),na.rm=TRUE)/length(fia.date)*100
+```
+
+
+
+wget http://flux.aos.wisc.edu/data/cheas/wlef/flux/current/
+grep
+wget -i file
+wget --reject=png http://flux.aos.wisc.edu/data/cheas/wlef/flux/current/
+
+wget -A.csv http://flux.aos.wisc.edu/data/cheas/wlef/flux/current/
+
+wget -r -l 1 -A.nc http://flux.aos.wisc.edu/data/cheas/wlef/netcdf/
+
+wget -O log.txt http://flux.aos.wisc.edu/data/cheas/wlef/netcdf/
+
+
+
+```{r}
+## make sure that netCDF is installed
+install.packages("ncdf", dependencies = TRUE)
+library(ncdf)
+
+## grab data off the web
+## notes:
+##    1) wget could be used from command line
+##    2) if you don't have wget installed, use your web browser
+system("wget http://flux.aos.wisc.edu/data/cheas/wlef/netcdf/US-PFa-WLEF-TallTowerClean-2012-L0-vFeb2013.nc")
+
+## open the netCDF file
+wlef = open.ncdf("US-PFa-WLEF-TallTowerClean-2012-L0-vFeb2013.nc")
+
+print.ncdf(wlef)    ## metadata
+
+NEE = get.var.ncdf(wlef,"NEE_co2")    ## NEE data
+
+## matrix dimensions
+height = get.var.ncdf(wlef,"M_lvl")  
+doy = get.var.ncdf(wlef,"time")  # day of year
+
+## print fluxes at 3 different heights
+par(mfrow=c(3,1))
+for(i in 1:3){
+plot(time,filter(NEE[i,],rep(1/24,24)),type='l',main=paste("Height =",height[i],"m"))
+}
+```
+
+Question 3: plot the methane flux timeseries with a 1 day filter.
+
+```{r}
+ch4 = get.var.ncdf(wlef,"NEE_ch4")
+par(mfrow=c(1,1))
+plot(time,filter(ch4,rep(1/24,24)),type='l',main="CH4")
+```
+
+#install_github("rWBclimate", "ropensci")
+#library(rWBclimate)
+
 * Shell primer
 * pulling/streaming data
   * wget
@@ -12,6 +131,7 @@ Exercise 3: Tools for big data
 * Self-documenting data
   * netCDF tools
   * xml and JSON
+* metadata?
 
 Ideas: pull a SMALL data set
 
