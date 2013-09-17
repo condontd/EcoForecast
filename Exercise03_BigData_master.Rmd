@@ -44,6 +44,11 @@ For more information, please visit http://www.google.org/flutrends
 Using the US Forest Service's Forest Inventory and Analysis (FIA) data set, plot the rank vs log(abundance) curve for tree seedling counts from Rhode Island. Data is available at http://apps.fs.fed.us/fiadb-downloads/RI_SEEDLING.CSV and the relevant columns are TREECOUNT (raw seedling counts) and SPCD (species codes). 
 Hints: tapply, sum, na.rm=TRUE, sort, decreasing=TRUE, log='y'
 
+```{r}
+fia = read.csv("http://apps.fs.fed.us/fiadb-downloads/RI_SEEDLING.CSV")
+abundance = tapply(fia$TREECOUNT,fia$SPCD,sum,na.rm=TRUE)
+plot(sort(abundance,decreasing=TRUE),log="y",type='b')
+```
 
 Web Scraping
 ------------
@@ -80,6 +85,14 @@ hist(yield_table$Mean)                          ## plot a histogram of yields
 
 **Question 2:**
 What fraction of the state-level files in the FIA database at http://apps.fs.fed.us/fiadb-downloads/datamart.html were created before 2011/1/1 ?  hint: this is the 6th table on the page
+
+```{r}
+fia.updates = getURL("http://apps.fs.fed.us/fiadb-downloads/datamart.html")
+fia_table = readHTMLTable(fia.updates)
+fia.date = as.Date(fia_table[[6]][,4])
+plot(sort(fia.date),type='l')
+sum(fia.date < as.Date("2011/1/1"),na.rm=TRUE)/length(fia.date)*100
+```
 
 grep, system, RegExp
 --------------------
@@ -188,6 +201,11 @@ plot(doy,filter(NEE[i,],rep(1/24,24)),type='l',main=paste("Height =",height[i],"
 
 **Question 4:** Plot the methane flux timeseries with a 12 hour filter.
 
+```{r}
+ch4 = get.var.ncdf(wlef,"NEE_ch4")
+par(mfrow=c(1,1))
+plot(doy,filter(ch4,rep(1/12,12)),type='l',main="CH4")
+```
 
 SOAP
 ----
