@@ -216,7 +216,7 @@ GetProducts()
 GetBands(Product="MOD13Q1")
 ```
 
-Next, lets grab the data for a specific band (EVI) within a specific product (MOD13Q1). We'll focus on the location of the WLEF flux tower and look at the same year as we did with the flux data (2012). The argument Size defines the dimensions of the box grabbed in terms of distance (in kilometers) outward from the center
+Next, lets grab the data for a specific band (EVI) within a specific product (MOD13Q1). We'll focus on the location of the WLEF flux tower and look at the same year as we did with the flux data (2012). The argument Size defines the dimensions of the box grabbed in terms of distance (in kilometers) outward from the center. Note that in practice we would also want to query the QAQC data for this variable, `250m_16_days_VI_Quality`, as well and use it to screen the data.
 
 ```{r}
 MODISSubsets(data.frame(lat=46.0827,long=-89.9792,start.date=2012,end.date=2012),
