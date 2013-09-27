@@ -8,7 +8,7 @@ Note: The code in this exercise will download data off the web dynamically, whic
 
 ```{r,echo=FALSE}
 ## since libraries will be pulled, make sure repository is set
-if(is.null(getOption("repos")) option(repos = "http://cran.us.r-project.org"))
+if(is.null(getOption("repos"))) option(repos = "http://cran.us.r-project.org")
 ```
 
 Pulling data directly off the web
@@ -39,7 +39,7 @@ Note: To open these files in a spreadsheet application, we recommend you save ea
 For more information, please visit http://www.google.org/flutrends
 ```
 
-**Question 1: **
+**Question 1:**
 
 Using the US Forest Service's Forest Inventory and Analysis (FIA) data set, plot the rank vs log(abundance) curve for tree seedling counts from Rhode Island. Data is available at http://apps.fs.fed.us/fiadb-downloads/RI_SEEDLING.CSV and the relevant columns are TREECOUNT (raw seedling counts) and SPCD (species codes). 
 Hints: tapply, sum, na.rm=TRUE, sort, decreasing=TRUE, log='y'
@@ -59,7 +59,7 @@ if(!("RCurl" %in% pkg)){
 library("RCurl")
 
 # Install the XML package if necessary
-if(!("RCurl" %in% pkg)){
+if(!("XML" %in% pkg)){
   install.packages("XML", dependencies = TRUE)
 }
 library("XML")

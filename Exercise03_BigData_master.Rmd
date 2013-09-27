@@ -90,8 +90,9 @@ What fraction of the state-level files in the FIA database at http://apps.fs.fed
 fia.updates = getURL("http://apps.fs.fed.us/fiadb-downloads/datamart.html")
 fia_table = readHTMLTable(fia.updates)
 fia.date = as.Date(fia_table[[6]][,4])
+sum(fia.date < as.Date("2011/1/1"),na.rm=TRUE)/sum(!is.na(fia.date))*100
+
 plot(sort(fia.date),type='l')
-sum(fia.date < as.Date("2011/1/1"),na.rm=TRUE)/length(fia.date)*100
 ```
 
 grep, system, RegExp
