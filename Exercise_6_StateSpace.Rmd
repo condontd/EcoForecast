@@ -1,0 +1,118 @@
+Activity 6 - State-space models
+========================================================
+
+
+
+Grab data
+```{r}
+gflu = read.csv("http://www.google.org/flutrends/us/data.txt",skip=11)
+time = as.Date(gflu$Date)
+y = gflu[,c("Massachusetts","New.York","Connecticut")]
+plot(time,y[,1],type='n',ylab="Flu Index",ylim=range(y))
+for(i in 1:ncol(y)){
+  lines(time,y[,i],col=i)
+}
+pairs(y)
+y.orig = y = y[,1]
+```
+
+define BUGS function
+```{r}
+RandomWalk = "
+model{
+  
+  #### Data Model
+  for(i in 1:n){
+    y[i] ~ dnorm(x[i],tau_obs)
+  }
+  
+  #### Process Model
+  for(i in 2:n){
+    x[i]~dnorm(x[i-1],tau_add)
+  }
+  
+  #### Priors
+  x[1] ~ dnorm(x_ic,tau_ic)
+  tau_obs ~ dgamma(a_obs,r_obs)
+  tau_add ~ dgamma(a_add,r_add)
+}
+"
+```
+
+MCMC initialization
+```{r}
+init <- list(x_ic = log(y[1]),tau_add=1/var(diff(log(y))),tau_obs=2/var(log(y)))
+```
+
+
+Define data and priors
+```{r}
+data <- list(y=log(y),n=length(y),x_ic=log(1000),tau_ic=100,a_obs=1,r_obs=1,a_add=1,r_add=1)
+```
+
+
+Call JAGS
+```{r}
+library(rjags)
+# j.model   <- jags.model (file = "rw.bug",
+j.model   <- jags.model (file = textConnection(RandomWalk),
+                             data = data,
+                             inits = init,
+                             n.chains = 3)
+jags.out   <- coda.samples (model = j.model,
+                            variable.names = c("tau_add","tau_obs"),
+                                n.iter = 1000)
+plot(jags.out)
+jags.out   <- coda.samples (model = j.model,
+                            variable.names = c("x","tau_add","tau_obs"),
+                                n.iter = 10000)
+
+ciEnvelope <- function(x,ylo,yhi,...){
+  polygon(cbind(c(x, rev(x), x[1]), c(ylo, rev(yhi),
+                                      ylo[1])), border = NA,...) 
+}
+out <- as.matrix(jags.out)
+ci <- apply(exp(out[,3:ncol(out)]),2,quantile,c(0.025,0.5,0.975))
+plot(time,ci[2,],type='n',ylim=range(y,na.rm=TRUE),ylab="Flu Index")
+ciEnvelope(time,ci[1,],ci[3,],col="lightBlue")
+#lines(time,ci[2,],lwd=3)
+points(time,y,pch="+",cex=0.5)
+
+plot(time,ci[2,],type='n',ylim=range(y,na.rm=TRUE),ylab="Flu Index",log='y')
+ciEnvelope(time,ci[1,],ci[3,],col="lightBlue")
+#lines(time,ci[2,],lwd=3)
+points(time,y,pch="+",cex=0.5)
+
+par(mfrow=c(2,1))
+hist(1/sqrt(out[,1]),main=colnames(out)[1])
+hist(1/sqrt(out[,2]),main=colnames(out)[2])
+
+par(mfrow=c(1,1))
+plot(out[,1],out[,2],pch=".")
+```
+
+Assignment: Convert a section of data to NA's, refit. compare the CI and generate a predicted vs observed plot for the data points that were removed
+sel = sample.int(length(y),80)
+y[sel] <- NA
+
+sel = unique(as.vector(sapply(sample.int(length(y),5),function(x){x+0:9})))
+points(time[sel],y.orig[sel],col=2,pch=18,cex=0.5)
+
+
+plot(ci[2,sel],y.orig[sel],xlab="predicted",ylab="observed",xlim=range(ci[,sel]))
+abline(0,1)
+sels = sel[order(y.orig[sel])]
+lines(ci[1,sels],y.orig[sels],col=2)
+lines(ci[3,sels],y.orig[sels],col=2)
+
+Sensitivity to the fraction missing? To the size of the gap?
+
+Forecast
+
+Would be cool to make this into a space-time CAR model.
+```{r}
+I = diag(1,3)
+#w = matrix(0.5,3,3)-0.5*I
+w = matrix(1/3,3,3)
+solve(I-w)
+```
