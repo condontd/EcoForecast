@@ -9,7 +9,7 @@ In today's exercise we're going to explore the use of the particle filter to con
 
 The code below is longer than most assignments, but this not due to the complexity of the PF itself. Rather, we will spend a decent amount of code on defining the model, defining the initial conditions, and defining the prior distributions for the model parameters. 
 
-The initial code is set up to run with a small ensemble size to allow you to be able to "Knit" this document. The final run should be conducted with a decently large ensemble (500-5000 depending on what your computer can handle). Since this requires large simulation, turn in the final HTML, not the Rmd, and feel free to answer questions separately (e.g. in email or another doc) so you don't have to run a second time to include your answers. Alternatively, you could run the analysis block-by-block and cut-and-paste the figures into a separate document.
+The initial code is set up to run with a small ensemble size (ne=10) and short time (nt=800) to allow you to be able to "Knit" this document. The final run should be conducted with a decently large ensemble (500-5000 depending on what your computer can handle) and be for the full year (nt = length(time). Since this requires large simulation, turn in the final HTML, not the Rmd, and feel free to answer questions separately (e.g. in email or another doc) so you don't have to run a second time to include your answers. Alternatively, you could run the analysis block-by-block and cut-and-paste the figures into a separate document.
 
 In addition to getting this code to run, your assignment is:
 
@@ -55,6 +55,7 @@ SSSEM <- function(X,params,inputs,timestep=1800){
 }
 
   ##Unit Converstion: umol/m2/sec to Mg/ha/timestep
+timestep = 1800 #seconds
 k = 1e-6*12*1e-6*10000*timestep #mol/umol*gC/mol*Mg/g*m2/ha*sec/timestep
 
 ## reimplimentation of the rdirichlet function from MCMCpack
@@ -73,11 +74,17 @@ ciEnvelope <- function(x,ylo,yhi,...){
                                       ylo[1])), border = NA,...) 
 }
 
+col.alpha <- function(col,alpha=1){
+  rgb = col2rgb(col)
+  rgb(rgb[1],rgb[2],rgb[3],alpha*255,maxColorValue=255)
+}
+
+
 ## weighted quantile
 wtd.quantile <- function(x,wt,q){ 
     ord <- order(x)
     wstar <- cumsum(wt[ord])/sum(wt)
-    qi <- findInterval(q,wstar)
+    qi <- findInterval(q,wstar); qi[qi<1]=1;qi[qi>length(x)]=length(x)
     return(x[ord[qi]])
   }
 ```
@@ -86,7 +93,7 @@ Having defined our model, the next step is to define the ensemble size and gener
 
 ```{r}
 #### SET THE ENSEMBLE SIZE
-ne = 10 #00
+ne = 1000
 
 ### Initial State (Mg/ha)
 Bwood = (c(11983,12097)+c(3668,3799)+c(161,192))*1e-6*10000 ## stem+coarse root + fine root, g/m2->Mg/ha
@@ -148,16 +155,11 @@ print.ncdf(met)
 PAR = get.var.ncdf(met,"PAR")
 for(i in which(PAR < -10)){PAR[i]=PAR[i-1]} ##uber-naive gapfilling
 temp = get.var.ncdf(met,"TA")
-ustar = get.var.ncdf(met,"UST")
 time = get.var.ncdf(met,"DOY")
 close.ncdf(met)
 plot(PAR,type='l')
 plot(temp,type='l')
 inputs = data.frame(PAR=PAR,temp=temp)
-
-## load partitioned flux data
-L4 = read.csv("AMF_USMe2_2005_L4_h_V002.txt",header=TRUE,na.strings="-9999")
-L4[L4==-9999] = NA
 ```
 
 Now we're ready to produce our initial ensemble forecast for the system. to do this we'll just set up some storage and loop over calling the model each time step. After this we'll generate some basic diagnosic plots for the model.
@@ -166,53 +168,30 @@ Now we're ready to produce our initial ensemble forecast for the system. to do t
 ## default simulation
 nt = length(time)
 output = array(NA,c(nt,ne,12))
-varnames <- c("Bleaf","Bwood","BSOM","LAI","NEP","GPP","Ra","NPPw","NPPl","Rh","litter","CWD")
-units <- c("Mg/ha","Mg/ha","Mg/ha","m2/m2","umol/m2/sec","umol/m2/sec","umol/m2/sec","umol/m2/sec","umol/m2/sec","umol/m2/sec","Mg/ha/timestep","Mg/ha/timestep")
 for(t in 1:nt){
   output[t,,]=as.matrix(SSSEM(X,params,inputs[t,]))
   X=output[t,,1:3]
   if((t %% 48) == 0) print(t/48) ## day counter
 }
 
-pdf("test3S.pdf")
+## Basic time-series visualizations
+varnames <- c("Bleaf","Bwood","BSOM","LAI","NEP","GPP","Ra","NPPw","NPPl","Rh","litter","CWD")
+units <- c("Mg/ha","Mg/ha","Mg/ha","m2/m2","umol/m2/sec","umol/m2/sec","umol/m2/sec","umol/m2/sec","umol/m2/sec","umol/m2/sec","Mg/ha/timestep","Mg/ha/timestep")
 for(i in 1:12){
   ci = apply(output[,,i],1,quantile,c(0.025,0.5,0.975))
   plot(ci[2,],main=varnames[i],xlab="time",ylab=units[i],type='l',ylim=range(ci))
-  ciEnvelope(1:nt,ci[1,],ci[3,],col="lightGrey")
+  ciEnvelope(1:nt,ci[1,],ci[3,],col=col.alpha("lightGrey",0.5))
   lines(ci[2,])
-  if(varnames[i]=="NEP"){
-    lines(-L4$NEE_st_fMDS,col=2)
-  }
-}
-dev.off()
-
-if(FALSE){
-  ## KEEP IN MASTER, was used for testing
-  plot(-L4$NEE_st_fMDS,output$NEP)
-
-  GPPt = L4$GPP_st_MDS
-  GPPm = output$GPP
-  GPPt[PAR < 1] = NA
-  GPPm[PAR < 1] = NA
-  sel = which(GPPt > 0.1)
-  plot(GPPt[sel],GPPm[sel])
-  summary(lm(GPPm[sel]~GPPt[sel]-1))
-
-  REt = L4$Reco_st
-  REm = (output$Ra+output$Rh)*0.1
-  #GPPt[PAR < 1] = NA
-  #GPPm[PAR < 1] = NA
-  #sel = which(GPPt > 0.1)
-  plot(REt,REm)
-  summary(lm(REm~REt-1))
 }
 ```
+
+Next, let's load the MODIS LAI data. The code is set up so that if the data has already been downloaded it will skip redownloading the data if the file is present in order to save time.
 
 ```{r}
 ## filter with MODIS LAI
 
 ## first time run, download MODIS data
-if(length(list.files(pattern=".asc"))==0)){
+if(length(list.files(pattern=".asc"))==0){
   library("MODISTools")
   MODISSubsets(data.frame(lat=44.4523,long=-121.5574,start.date=2000,end.date=2012),
                Product="MOD15A2",Bands=c("FparLai_QC","LaiStdDev_1km","Lai_1km"),
@@ -222,9 +201,9 @@ if(length(list.files(pattern=".asc"))==0)){
 ## open MODIS data and extract remotely-sensed LAI (LAIr), 
 ## the standard deviation, and the QAQC flags 
 MODIS = read.csv(list.files(pattern=".asc")[1],header=FALSE,as.is=TRUE,na.string="-3000")
+MODvar = substr(MODIS[,1],43,52)
 Mtime.raw = substr(MODIS[which(MODvar == "Lai_1km"),3],2,8)
 Mtime = as.Date(Mtime.raw,format="%Y%j")
-MODvar = substr(MODIS[,1],43,52)
 QC = MODIS[which(MODvar == "FparLai_QC"),10]
 LAIr = MODIS[which(MODvar == "Lai_1km"),10]*0.1
 LAIr.sd = MODIS[which(MODvar == "LaiStdDev_"),10]*0.1
@@ -242,35 +221,42 @@ LAIr = LAIr[yr]
 LAIr.sd = LAIr.sd[yr]
 QC = QC[yr]
 Mtime = Mtime[yr]
+```
 
+Next, let's calculate the time-averaged LAI from the model for the same periods as the LAI and compare our initial ensemble to the data.
+
+```{r}
 ## Calculate model ensemble means for same periods
 window = rep(1:(length(yr)),each=48*8,length=nt)
 LAIm = t(apply(output[,,4],2,tapply,window,mean))
 LAIm.ci  = apply(LAIm,2,quantile,c(0.025,0.5,0.975))
 
 ## plot model and observations
-plot(Mtime,LAIm.ci[2,],ylab="LAI",xlab="Time",
+Msel = 1:ncol(LAIm.ci)
+plot(Mtime[Msel],LAIm.ci[2,],ylab="LAI",xlab="Time",
      ylim=range(c(range(LAIm.ci),range(LAIr,na.rm=TRUE))),type='n')
-ciEnvelope(Mtime,LAIm.ci[1,],LAIm.ci[3,],col="lightGrey")
+ciEnvelope(Mtime[Msel],LAIm.ci[1,],LAIm.ci[3,],col=col.alpha("lightGrey",0.5))
 points(Mtime,LAIr)    
 for(i in 1:length(LAIr)){
   if(!is.na(QC[i])){
     lines(rep(Mtime[i],2),LAIr[i]+c(-1,1)*LAIr.sd[i])
   }
 }
+```
 
+Given this ensemble we can next apply a particle filter to this existing ensemble forecast by calculating the cumulative likelihood of the observations for each ensemble member. Note that in the code below LAIm is the model (initial ensemble), LAIpf is the non-resampling particle filter, and LAIr is the remotely sensed observations.
+
+```{r}
 ## calculate the cumulative likelihoods
 ## to be used as PF weights
 LAIlike = array(NA,dim(LAIm))
 sel=1:ncol(LAIm.ci)
 for(i in 1:ne){
-  LAIlike[i,] = dnorm(LAIm[i,],LAIr[sel],LAIr.sd[sel],log=TRUE)
+  LAIlike[i,] = dnorm(LAIm[i,],LAIr[sel],LAIr.sd[sel],log=TRUE)  ## calculate log likelihoods
   LAIlike[i,is.na(LAIlike[i,])] = 0       ## missing data as weight 1
   LAIlike[i,] = exp(cumsum(LAIlike[i,]))  ## convert to cumulative
 }
 
-##diagnostic for obs #14
-plot(LAIm[,14],LAIlike[,14])
 
 ## Non-resampling Particle Filter
 ## calculation of CI
@@ -282,10 +268,10 @@ for(i in 1:nobs){
 }
 
 ## plot original ensemble and PF with data
-plot(Mtime,LAIm.ci[2,],ylim=range(c(range(LAIm.ci),range(LAIr,na.rm=TRUE))),
+plot(Mtime[Msel],LAIm.ci[2,],ylim=range(c(range(LAIm.ci),range(LAIr,na.rm=TRUE))),
      type='n',ylab="LAI",xlab="Time")
-ciEnvelope(Mtime,LAIm.ci[1,],LAIm.ci[3,],col="lightGrey")
-ciEnvelope(Mtime,LAIpf[1,],LAIpf[3,],col="lightBlue")
+ciEnvelope(Mtime[Msel],LAIm.ci[1,],LAIm.ci[3,],col=col.alpha("lightGrey",0.5))
+ciEnvelope(Mtime[Msel],LAIpf[1,],LAIpf[3,],col=col.alpha("lightBlue",0.5))
 points(Mtime,LAIr)    
 for(i in 1:length(LAIr)){
   if(!is.na(QC[i])){
@@ -293,6 +279,8 @@ for(i in 1:length(LAIr)){
   }
 }
 ```
+
+Next, before we move on to the resampling particle filter, we need to define an ancillary function, update.params, that will help us re-assign the parmeter values to different ensemble members when we resample from the ensemble members.
 
 ```{r}
 update.params <- function(params,index){
@@ -307,18 +295,16 @@ update.params <- function(params,index){
   params$CWD     = params$CWD[index,]
   return(params)
 }
-col.alpha <- function(col,alpha=1){
-  rgb = col2rgb(col)
-  rgb(rgb[1],rgb[2],rgb[3],alpha*255,maxColorValue=255)
-}
 ```
+
+Finally, let's implement the resampling particle filter. The code for this is organized in a way similar to the Kalman Filter assignment -- we loop over time and alternate between a forecast step and an analysis step. Since the observations only occur every 8 days, we only repeat the analysis step every 8 days (which for a 30 min timestep is every 48*8 timesteps).
 
 ```{r}
 ### resampling particle filter
 sample=0
-hist.params=list()
+hist.params=list()  ## since we resample parameters, create a record (history) of what values were used each step
 hist.params[[1]] = params
-X = X.orig
+X = X.orig  ## reset state to the initial values, not the final values from the previous ensemble
 for(t in 1:nt){
   
   ## forward step
@@ -344,16 +330,16 @@ for(t in 1:nt){
   }
 
 }
-
+ 
 ## Extract and summarize LAI (pr = PF, resampling)
 LAIpr = t(apply(output[,,4],2,tapply,window,mean))
 LAIpr.ci  = apply(LAIpr,2,quantile,c(0.025,0.5,0.975))
  
-plot(Mtime,LAIm.ci[2,],ylim=range(c(range(LAIm.ci),range(LAIr,na.rm=TRUE))),
+plot(Mtime[Msel],LAIm.ci[2,],ylim=range(c(range(LAIm.ci),range(LAIr,na.rm=TRUE))),
      type='n',ylab="LAI",xlab="Time")
-ciEnvelope(Mtime,LAIm.ci[1,],LAIm.ci[3,],col="lightGrey")
-ciEnvelope(Mtime,LAIpf[1,],LAIpf[3,],col=col.alpha("lightBlue",0.5))
-ciEnvelope(Mtime,LAIpr.ci[1,],LAIpr.ci[3,],col=col.alpha("lightGreen",0.5))
+ciEnvelope(Mtime[Msel],LAIm.ci[1,],LAIm.ci[3,],col=col.alpha("lightGrey",0.5))
+ciEnvelope(Mtime[Msel],LAIpf[1,],LAIpf[3,],col=col.alpha("lightBlue",0.5))
+ciEnvelope(Mtime[Msel],LAIpr.ci[1,],LAIpr.ci[3,],col=col.alpha("lightGreen",0.5))
 points(Mtime,LAIr)    
 for(i in 1:length(LAIr)){
   if(!is.na(QC[i])){
@@ -400,5 +386,5 @@ for(i in 1:length(params)){
       }      
     }  
 }
-
 ```
+Note, the digits on the posterior and prior plots are the mean and std for the prior (top row, black line), and the posterior (second row, red line)
